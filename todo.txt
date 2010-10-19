@@ -1,0 +1,4 @@
+
+- map from x coord to a date (or any label)
+- Allow y to be < 0
+- don't graph y if its below the ymin

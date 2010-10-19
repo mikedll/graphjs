@@ -6,13 +6,15 @@ function mouseScroll(e) {
 }
 
 function loadUp() {
+
     var mapToDate = function( i ) {
-	var base = 0 + i;
+	var d = Date.parse("2010-10-19").add(parseInt( i )).days();
+        console.debug( "Mapping: " + parseInt( i ) + " to " + d);
+	return d.toString("MMM d");
     };
 
-
     var data = new Array( [1,1], [4,2], [5,3], [6,2] );
-    g1 = new Graph( [0,7], [0,4], data );
+    g1 = new Graph( [0,7], [0,4], data, mapToDate );
     g1.renderInCanvas('graph1');
 
 

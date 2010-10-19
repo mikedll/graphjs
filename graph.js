@@ -1,5 +1,5 @@
 
-function Graph( xBounds, yBounds, funcOrData ) {
+function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.ctx = null;
     this.height = this.width = 0;
     this.func = null;
@@ -25,6 +25,8 @@ function Graph( xBounds, yBounds, funcOrData ) {
     this.markerSize = 10;
 
     this.zoomFactorPercent = 2;
+
+    this.labeler = labeler;
 };
 
 Graph.prototype.isFunctional = function() {
@@ -188,11 +190,20 @@ Graph.prototype.drawAxisLines = function() {
     this.drawLine( this.insetWH(0,0), this.insetWH(this.wRange()-1,0) );
 };
 
+Graph.prototype.xMarkerString = function( range, markerCount, markerIndex ) {
+    if( this.labeler == null)
+	return this.markerString( range, markerCount, markerIndex );
+    
+    var x = (range / markerCount) * markerIndex;
+    return String( this.labeler( x ) );
+};
+
 Graph.prototype.markerString = function( range, markerCount, markerIndex  ) {
+    var x = (range / markerCount) * markerIndex;
     if( range <= 1.0 )
-	return String( Math.round( (range / markerCount) * markerIndex * 100 ) / 100 );
+	return String( Math.round( x * 100 ) / 100 );
     else
-	return String( Math.round( (range / markerCount) * markerIndex ) );
+	return String( Math.round( x ) );
 };
 
 Graph.prototype.drawMarkers = function() {
@@ -200,7 +211,7 @@ Graph.prototype.drawMarkers = function() {
     var markerSize = this.wRange() / this.Nmarkers;
     for( i = 0; i <= this.Nmarkers; i++ ) {
 	var markerW = markerSize * i;
-	var xString = this.markerString( this.xRange(), this.Nmarkers, i );
+	var xString = this.xMarkerString( this.xRange(), this.Nmarkers, i );
 
 	this.drawLine( this.insetWH(markerW,0), this.insetWH(markerW,this.markerSize) );
 	this.ctx.fillText( xString, this.insetW(markerW), this.canvasInvertsY(this.xLabelHeight / 2));

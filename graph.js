@@ -1,27 +1,46 @@
 
+var GRAPH_DEBUG = false;
+
+function dd( s ) {
+    if( GRAPH_DEBUG )
+	console.debug( s );
+}
+
 function Graph( xBounds, yBounds, funcOrData, labeler ) {
+    var options = {
+	padX: true
+    };
     this.ctx = null;
     this.height = this.width = 0;
     this.func = null;
     this.data = null;
 
-    if( funcOrData instanceof Array )
-	this.data = funcOrData;
+    if( funcOrData instanceof Array ) {
+	this.data = funcOrData;	
+	if( this.data.length == 0 ) {
+	    this.data = [1,0];
+	}
+    }
     else if ( funcOrData instanceof Function )
 	this.func = funcOrData;
     else
-	console.debug("Expected Array of Function as 3rd parameter to graph constructor.");
+	dd("Expected Array of Function as 3rd parameter to graph constructor.");
 
     this.xBounds = xBounds;
+    if( options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
+	this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
+	this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
+    }
     this.yBounds = yBounds;
 
     // TODO: handle when graph is too small
     this.xLabelHeight = 20;
     this.yLabelWidth = 60;
+    this.yLabelPadding = 10;
 
-    this.upperPadding = this.rightPadding = 10;
+    this.upperPadding = this.rightPadding = 20;
 
-    this.Nmarkers = 7;
+    this.Nmarkers = 6;
     this.markerSize = 10;
 
     this.zoomFactorPercent = 2;
@@ -32,7 +51,7 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
 Graph.prototype.isFunctional = function() {
     if( this.func != null ) return true;
     else if ( this.data != null ) return false;
-    else console.debug("Graph is in invalid state: neither functional nor with data.");
+    else dd("Graph is in invalid state: neither functional nor with data.");
     return null;
 };
 
@@ -136,14 +155,14 @@ Graph.prototype.drawGraphLine = function() {
 	var y = this.isFunctional() ? this.func(x) : this.interpolate( x );
 
 	if( y == null ) {
-	    console.debug("Y undefined x == " + x);
+	    dd("Y undefined x == " + x);
 	    continue;
 	}
 
 	var h = dhdy * y;
 
 	if( h >= this.hRange() || h < 0) {
-	    console.debug("h (" + h + ") from y (" + y + ") is out of h range.");
+	    dd("h (" + h + ") from y (" + y + ") is out of h range.");
 	    continue;
 	}
 
@@ -159,7 +178,7 @@ Graph.prototype.interpolate = function(x) {
     var dataWLeft = null, dataWRight = null;
 
     if( this.data.length == 0 || x < this.data[0][0] ) {
-	console.debug("X (" + x + ")is less than the smallest data point available, " + this.data[0][0]);
+	dd("X (" + x + ")is less than the smallest data point available, " + this.data[0][0]);
 	return null;	
     }
 
@@ -171,7 +190,7 @@ Graph.prototype.interpolate = function(x) {
     if( dataWLeft < this.data.length - 1 )
 	dataWRight = dataWLeft + 1;
     else
-	console.debug("Cannot extrapolate beyond highest X data point.");
+	dd("Cannot extrapolate beyond highest X data point.");
 
     if( dataWLeft == null || dataWRight == null ) return null;
 
@@ -179,7 +198,7 @@ Graph.prototype.interpolate = function(x) {
 
     var dx = (x - this.data[dataWLeft][0]);
 
-    console.debug("interpolateing from (" + this.data[dataWLeft][0] + ", " + this.data[dataWLeft][1] + ") "
+    dd("interpolateing from (" + this.data[dataWLeft][0] + ", " + this.data[dataWLeft][1] + ") "
 		  + " to (" + this.data[dataWRight][0] + ", " + this.data[dataWRight][1] + ") "
 		  + " with dydx (" + dydx + ") and dx (" + dx + ")");
     return this.data[dataWLeft][1] + dydx * dx;
@@ -190,39 +209,51 @@ Graph.prototype.drawAxisLines = function() {
     this.drawLine( this.insetWH(0,0), this.insetWH(this.wRange()-1,0) );
 };
 
-Graph.prototype.xMarkerString = function( range, markerCount, markerIndex ) {
-    if( this.labeler == null)
-	return this.markerString( range, markerCount, markerIndex );
-    
-    var x = (range / markerCount) * markerIndex;
-    return String( this.labeler( x ) );
-};
-
 Graph.prototype.markerString = function( range, markerCount, markerIndex  ) {
     var x = (range / markerCount) * markerIndex;
-    if( range <= 1.0 )
-	return String( Math.round( x * 100 ) / 100 );
-    else
-	return String( Math.round( x ) );
+    return String( Math.round( x * 100 ) / 100 );
 };
 
 Graph.prototype.drawMarkers = function() {
-    var i;
-    var markerSize = this.wRange() / this.Nmarkers;
-    for( i = 0; i <= this.Nmarkers; i++ ) {
-	var markerW = markerSize * i;
-	var xString = this.xMarkerString( this.xRange(), this.Nmarkers, i );
+    (this.labeler == null) ? this.drawXMarkers() : this.drawXMarkersWithLabeler();
+    this.drawYMarkers();
+};
 
-	this.drawLine( this.insetWH(markerW,0), this.insetWH(markerW,this.markerSize) );
-	this.ctx.fillText( xString, this.insetW(markerW), this.canvasInvertsY(this.xLabelHeight / 2));
+Graph.prototype.drawWMarker = function( w, xString ) {
+    this.drawLine( this.insetWH(w,0), this.insetWH(w,this.markerSize) );
+    this.ctx.fillText( xString, this.insetW(w), this.canvasInvertsY(this.xLabelHeight / 2));	
+};
+
+Graph.prototype.drawXMarkersWithLabeler = function() {
+    var xMarkers = this.labeler( this.xBounds, this.Nmarkers );
+    var dxdw = this.xRange() / this.wRange();
+
+    for( var i = 0; i < xMarkers.length; i++ ) {
+	var markerW = xMarkers[i][0] / dxdw;
+	var xString = xMarkers[i][1];
+	this.drawWMarker( markerW, xString );
     }
+};
 
-    markerSize = this.hRange() / this.Nmarkers;
-    for( i = 0; i <= this.Nmarkers; i++) {
+Graph.prototype.drawXMarkers = function() {
+    var markerSize = this.wRange() / this.Nmarkers;
+    for( var i = 0; i <= this.Nmarkers; i++ ) {
+	var markerW = markerSize * i;
+	var xString = this.markerString( this.xRange(), this.Nmarkers, i );
+	this.drawWMarker( markerW, xString );
+    }
+};
+
+Graph.prototype.drawYMarkers = function() {
+    var markerSize = this.hRange() / this.Nmarkers;
+    for( var i = 0; i <= this.Nmarkers; i++) {
      	var markerH =  markerSize * i;
 	var yString = this.markerString( this.yRange(), this.Nmarkers, i );
 	this.drawLine( this.insetWH(0,markerH), this.insetWH(this.markerSize,markerH) );
-	this.ctx.fillText( yString, this.yLabelWidth / 2, this.insetH(markerH) );
+
+	this.ctx.textAlign = 'right';
+	this.ctx.fillText( yString, this.yLabelWidth  - this.yLabelPadding, this.insetH(markerH) );
+	this.ctx.textAlign = 'center';
     }
 };
 
@@ -233,6 +264,3 @@ Graph.prototype.drawLine = function(from,to) {
     this.ctx.stroke();
     this.ctx.closePath();
 };
-
-
-

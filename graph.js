@@ -1,7 +1,7 @@
 
 var GRAPH_DEBUG_LEVEL = 1;
 
-function dd( s, level ) {
+function gdd( s, level ) {
     if( typeof(level) === "undefined" ) {
         level = 0;
     }
@@ -11,7 +11,7 @@ function dd( s, level ) {
 }
 
 function Graph( xBounds, yBounds, funcOrData, labeler ) {
-    var options = {
+    this.options = {
 	      padX: true
     };
     this.ctx = null;
@@ -28,10 +28,10 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     else if ( funcOrData instanceof Function )
 	  this.func = funcOrData;
     else
-	      dd("Expected Array of Function as 3rd parameter to graph constructor.");
+	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
 
     this.xBounds = xBounds;
-    if( options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
+    if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
 	      this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
 	      this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
     }
@@ -55,7 +55,7 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
 Graph.prototype.isFunctional = function() {
     if( this.func != null ) return true;
     else if ( this.data != null ) return false;
-    else dd("Graph is in invalid state: neither functional nor with data.");
+    else gdd("Graph is in invalid state: neither functional nor with data.");
     return null;
 };
 
@@ -131,6 +131,33 @@ Graph.prototype.changeFunction = function(f) {
     this.redraw();
 };
 
+Graph.prototype.reload = function( xBounds, yBounds, funcOrData, labeler ) {
+    this.func = null;
+    this.data = null;
+
+    if( funcOrData instanceof Array ) {
+	      this.data = funcOrData;	
+	      if( this.data.length == 0 ) {
+	          this.data = [1,0];
+	      }
+    }
+    else if ( funcOrData instanceof Function )
+	  this.func = funcOrData;
+    else
+	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
+
+    this.xBounds = xBounds;
+    if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
+	      this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
+	      this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
+    }
+    this.yBounds = yBounds;
+
+    this.labeler = labeler;
+
+    this.redraw();    
+};
+
 Graph.prototype.initCanvas = function(id) {
     this.canvasId = id;
     this.ctx = document.getElementById(this.canvasId).getContext('2d');    
@@ -161,14 +188,14 @@ Graph.prototype.drawGraphLine = function() {
 	      var y = this.isFunctional() ? this.func(x) : this.interpolate( x );
 
 	      if( y == null ) {
-	          dd("Y undefined x == " + x);
+	          gdd("Y undefined x == " + x);
 	          continue;
 	      }
 
 	      var h = dhdy * (y - this.yBounds[0]);
 
 	      if( h >= this.hRange() || h < 0) {
-	          dd("h (" + h + ") from y (" + y + ") is out of h range.", 1);
+	          gdd("h (" + h + ") from y (" + y + ") is out of h range.", 1);
 	          continue;
 	      }
 
@@ -184,7 +211,7 @@ Graph.prototype.interpolate = function(x) {
     var dataWLeft = null, dataWRight = null;
 
     if( this.data.length == 0 || x < this.data[0][0] ) {
-	      dd("X (" + x + ")is less than the smallest data point available, " + this.data[0][0]);
+	      gdd("X (" + x + ")is less than the smallest data point available, " + this.data[0][0]);
 	      return null;	
     }
 
@@ -196,7 +223,7 @@ Graph.prototype.interpolate = function(x) {
     if( dataWLeft < this.data.length - 1 )
 	      dataWRight = dataWLeft + 1;
     else
-	      dd("Cannot extrapolate beyond highest X data point.");
+	      gdd("Cannot extrapolate beyond highest X data point.");
 
     if( dataWLeft == null || dataWRight == null ) return null;
 
@@ -204,7 +231,7 @@ Graph.prototype.interpolate = function(x) {
 
     var dx = (x - this.data[dataWLeft][0]);
 
-    dd("interpolating from (" + this.data[dataWLeft][0] + ", " + this.data[dataWLeft][1] + ") "
+    gdd("interpolating from (" + this.data[dataWLeft][0] + ", " + this.data[dataWLeft][1] + ") "
 		   + " to (" + this.data[dataWRight][0] + ", " + this.data[dataWRight][1] + ") "
 		   + " with dydx (" + dydx + ") and dx (" + dx + ")");
     return this.data[dataWLeft][1] + dydx * dx;

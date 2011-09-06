@@ -41,6 +41,8 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.xLabelHeight = 20;
     this.yLabelWidth = 60;
     this.yLabelPadding = 10;
+    this.dataPointcircleRadius = 5;
+    this.lineWidth = 2;
 
     this.upperPadding = this.rightPadding = 20;
 
@@ -64,12 +66,11 @@ Graph.prototype.configureCanvasFont = function() {
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillStyle = '#fff';
-
 };
 
 Graph.prototype.configureCanvasLines = function() {    
     this.ctx.strokeStyle = '#fff';
-    this.ctx.lineWidth = 3;
+    this.ctx.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.getCSSInt = function(node, name) {
@@ -110,6 +111,14 @@ Graph.prototype.xRange = function() {
 
 Graph.prototype.yRange = function() {
     return this.yBounds[1] - this.yBounds[0];
+};
+
+Graph.prototype.dhdy = function() {
+    return this.hRange() / this.yRange();
+};
+
+Graph.prototype.dxdw = function() {
+    return this.xRange() / this.wRange();
 };
 
 Graph.prototype.redraw = function() {
@@ -172,14 +181,18 @@ Graph.prototype.renderInCanvas = function(id) {
 
     this.drawGraphLine();
 
+    if ( ! this.isFunctional() ) {
+        this.drawDataPoints();
+    }
+
     this.drawMarkers();
 
     this.drawAxisLines();
 };
 
 Graph.prototype.drawGraphLine = function() {
-    var dhdy = this.hRange() / this.yRange();
-    var dxdw = this.xRange() / this.wRange();
+    var dhdy = this.dhdy();
+    var dxdw = this.dxdw();
 
     this.ctx.beginPath();
     for( var w = 0; w < this.wRange(); w++ ) {
@@ -205,6 +218,24 @@ Graph.prototype.drawGraphLine = function() {
 
     this.ctx.stroke();
     this.ctx.closePath();
+};
+
+Graph.prototype.drawDataPoints = function() {
+    var dwdx = 1.0 / this.dxdw();
+    var dhdy = this.dhdy();
+
+    for( var i = 0; i < this.data.length; i++ )
+        if ( this.data[i][0] >= this.xBounds[0]  && this.data[i][0] <= this.xBounds[1] )
+            this.drawDataPointAt( dwdx * this.data[i][0], dhdy * this.data[i][1] );
+};
+
+Graph.prototype.drawDataPointAt = function( w, h ) {
+    this.ctx.beginPath();
+	  this.ctx.moveTo( this.insetW(w),this.insetH(h) );
+	  this.ctx.arc( this.insetW(w), this.insetH(h), this.dataPointcircleRadius, 0, 2 * Math.PI );
+    this.ctx.fill();
+    this.ctx.closePath();
+
 };
 
 Graph.prototype.interpolate = function(x) {

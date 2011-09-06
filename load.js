@@ -11,29 +11,29 @@ function mouseScroll(e) {
 function quagressXLabeler( baseDate ) {
 
     var iToDate = function( i ) {
-	var d = Date.parse( baseDate ).add(parseInt( i )).days();
-	return d.toString("MMM d");
+	      var d = Date.parse( baseDate ).add(parseInt( i )).days();
+	      return d.toString("MMM d");
     };
 
     var f = function( xRange, markerCount ) {
-	var markers = [];
-	var U = Math.ceil( xRange[1] );
-	var L = Math.floor( xRange[0] );
-	var step = Math.floor( (U - L) / markerCount );
+	      var markers = [];
+	      var U = Math.ceil( xRange[1] );
+	      var L = Math.floor( xRange[0] );
+	      var step = Math.floor( (U - L) / markerCount );
 
-	if( step == 0 ) step = 1;
+	      if( step == 0 ) step = 1;
 
-	var init;
-	if( step == 1 )
-	    init = 1;
-	else
-	    init = Math.floor(step / 2);
+	      var init;
+	      if( step == 1 )
+	          init = 1;
+	      else
+	          init = Math.floor(step / 2);
 
-	for( var i = init; i < U; i += step ) {
-	    markers.push( [ i, iToDate( i ) ] );
-	}
+	      for( var i = init; i < U; i += step ) {
+	          markers.push( [ i, iToDate( i ) ] );
+	      }
 
-	return markers;
+	      return markers;
     };
 
     return f;
@@ -47,7 +47,7 @@ function loadUp() {
     g1.renderInCanvas('graph1');
 
     function ligand(Kd) {
-	return function(C) { return ( 120000 * (C / (C+Kd))); };
+	      return function(C) { return ( 120000 * (C / (C+Kd))); };
     }
     g2 = new Graph( [0,100], [0,120000], ligand(15) );
     g2.renderInCanvas('graph2');

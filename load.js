@@ -55,7 +55,8 @@ function handleMouseOver(e) {
 };
 
 function handleMouseOut(e) {
-    console.debug("leave");
+    g1.onMouseOut();
+    $('#g1text').text("");
 };
 
 function handleMouseMove(e) {

@@ -151,6 +151,10 @@ Graph.prototype.zoom = function(delta) {
     this.redraw();
 };
 
+Graph.prototype.onMouseOut = function() {
+    this.redraw();
+};
+
 Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY ) {
     var w = this.screenXOffsetToW( screenX );
     var h = this.screenYOffsetToH( screenY );

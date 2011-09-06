@@ -2,7 +2,18 @@
 var g1, g2;
 
 function mouseScroll(e) {
-    g2.zoom( Event.wheel(e) );
+
+    var delta = 0;
+    if (e.wheelDelta) {
+        delta = e.wheelDelta/120; 
+        if (window.opera) delta = -delta;
+    } else if (e.detail) {
+        delta = -event.detail/3;
+    }
+
+    delta = Math.round(delta); //Safari Round
+
+    g2.zoom( delta );
 }
 
 /**
@@ -39,10 +50,29 @@ function quagressXLabeler( baseDate ) {
     return f;
 };
 
+function handleMouseOver(e) {
+    console.debug("enter");
+};
+
+function handleMouseOut(e) {
+    console.debug("leave");
+};
+
+function handleMouseMove(e) {
+    var vals = g1.getInterpolatedValuesOnMouseMoveAt( e.offsetX, e.offsetY );
+    if(vals == null) return;
+
+    var x = vals[0], y = vals[1];
+
+    x = x.toFixed(2);
+    y = y.toFixed(2);
+
+    $('#g1text').text("X = " + x + ", Y = " + y);
+};
 
 function loadUp() {
 
-    var data = [ [1,1], [4,2], [5,3], [6,2] ];
+    var data = [ [-5,2], [1,1], [4,2], [5,3], [6,2], [8,3] ];
     g1 = new Graph( [0,7], [0,4], data, quagressXLabeler("2010-10-19") );
     g1.renderInCanvas('graph1');
 
@@ -51,12 +81,20 @@ function loadUp() {
     }
     g2 = new Graph( [0,100], [0,120000], ligand(15) );
     g2.renderInCanvas('graph2');
-    Event.observe( $('graph2'), 'mousewheel', mouseScroll);
-    Event.observe( $('graph2'), 'DOMMouseScroll', mouseScroll);
+
+    $('#graph1')
+        .bind('mousemove', handleMouseMove )
+        .bind('mouseover', handleMouseOver )
+        .bind('mouseout', handleMouseOut );
+        
+
+    $('#graph2')
+        .bind('mousewheel', mouseScroll )
+        .bind('DOMMouseScroll', mouseScroll );
+
 }
 
 
-
-document.observe('dom:loaded', function() {
+$(function() {
 		     loadUp();
 		 });

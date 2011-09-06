@@ -12,7 +12,8 @@ function gdd( s, level ) {
 
 function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.options = {
-	      padX: true
+	      padX: true,
+        domainConceptuallyIntegers: true
     };
     this.ctx = null;
     this.height = this.width = 0;
@@ -82,7 +83,7 @@ Graph.prototype.setCSS = function(node, name, val) {
 };
 
 Graph.prototype.canvasInvertsY = function(y) {
-    return this.upperPadding + ((this.height - this.upperPadding) - y);
+    return this.height - y;
 };
 
 Graph.prototype.insetH = function(h) {
@@ -91,6 +92,21 @@ Graph.prototype.insetH = function(h) {
 
 Graph.prototype.insetW = function(w) {
     return (this.yLabelWidth + w);
+};
+
+Graph.prototype.screenYOffsetToH = function( screenYOffset ) {
+    if( screenYOffset < this.upperPadding ) return null;
+
+    var rightSideUp = this.height - screenYOffset;
+    if( rightSideUp < this.xLabelHeight) return null;
+
+    return rightSideUp - this.xLabelHeight;
+};
+
+Graph.prototype.screenXOffsetToW = function( screenXOffset ) {
+    if(screenXOffset < this.yLabelWidth) return null;
+    if(screenXOffset > this.width - this.rightPadding) return null;
+    return screenXOffset - this.yLabelWidth;
 };
 
 Graph.prototype.insetWH = function(w,h) {
@@ -133,6 +149,31 @@ Graph.prototype.zoom = function(delta) {
     this.yBounds[0] += ((this.yRange() * .2) / factor);
     this.yBounds[1] -= ((this.yRange() * .2) / factor);
     this.redraw();
+};
+
+Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY ) {
+    var w = this.screenXOffsetToW( screenX );
+    var h = this.screenYOffsetToH( screenY );
+    var wFinal = w, hFinal;
+
+    if(w == null || h == null) return null;
+
+    gdd( "Picked up w = " + w + ", h = " + h, 0 );
+    var x = this.dxdw() * w;
+    if( this.options.domainConceptuallyIntegers ) {
+        x = Math.round( x );
+        w = (1.0 / this.dxdw()) * x;
+    }
+    var y = this.interpolate( x );
+    hFinal = this.dhdy() * y;
+
+    this.redraw();
+    this.drawVeryThinLine( this.insetWH(w,0), this.insetWH(w,this.hRange()-1) );
+
+    // Not sure if this one really helps.
+    // this.drawVeryThinLine( this.insetWH(0,hFinal), this.insetWH(this.wRange()-1,hFinal) );
+
+    return [x, y];
 };
 
 Graph.prototype.changeFunction = function(f) {
@@ -319,6 +360,12 @@ Graph.prototype.drawYMarkers = function() {
 	      this.ctx.fillText( yString, this.yLabelWidth  - this.yLabelPadding, this.insetH(markerH) );
 	      this.ctx.textAlign = 'center';
     }
+};
+
+Graph.prototype.drawVeryThinLine = function(from, to ) {
+    this.ctx.lineWidth = 1;
+    this.drawLine(from, to);
+    this.ctx.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.drawLine = function(from,to) {

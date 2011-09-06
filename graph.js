@@ -160,18 +160,24 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
     var h = this.screenYOffsetToH( screenY );
     var wFinal = w, hFinal;
 
-    if(w == null || h == null) return null;
+    // This can theoretically be optimized if we keep track of
+    // whether there is already an interpolation line.
+    this.redraw();
+
+    if(w === null || h === null) return null;
 
     gdd( "Picked up w = " + w + ", h = " + h, 0 );
-    var x = this.dxdw() * w;
+
+    var x = this.dxdw() * w + this.xBounds[0];
     if( this.options.domainConceptuallyIntegers ) {
         x = Math.round( x );
-        w = (1.0 / this.dxdw()) * x;
+        w = (1.0 / this.dxdw()) * (x - this.xBounds[0]);
     }
-    var y = this.interpolate( x );
-    hFinal = this.dhdy() * y;
 
-    this.redraw();
+    var y = this.interpolate( x );
+    if(y  === null) return null;
+    hFinal = this.dhdy() * (y - this.yBounds[0]);
+
     this.drawVeryThinLine( this.insetWH(w,0), this.insetWH(w,this.hRange()-1) );
 
     // Not sure if this one really helps.
@@ -243,17 +249,21 @@ Graph.prototype.drawGraphLine = function() {
     for( var w = 0; w < this.wRange(); w++ ) {
 	      var x = this.xBounds[0] + dxdw * w;
 
+        if( w <= 3 ) {
+            gdd( "Seeking point for x = " + x, 0);
+        }
+
 	      var y = this.isFunctional() ? this.func(x) : this.interpolate( x );
 
 	      if( y == null ) {
-	          gdd("Y undefined x == " + x);
+	          gdd("Y undefined x == " + x, 0);
 	          continue;
 	      }
 
 	      var h = dhdy * (y - this.yBounds[0]);
 
 	      if( h >= this.hRange() || h < 0) {
-	          gdd("h (" + h + ") from y (" + y + ") is out of h range.", 1);
+	          gdd("h (" + h + ") from y (" + y + ") is out of h range.", 0);
 	          continue;
 	      }
 
@@ -269,9 +279,12 @@ Graph.prototype.drawDataPoints = function() {
     var dwdx = 1.0 / this.dxdw();
     var dhdy = this.dhdy();
 
-    for( var i = 0; i < this.data.length; i++ )
-        if ( this.data[i][0] >= this.xBounds[0]  && this.data[i][0] <= this.xBounds[1] )
-            this.drawDataPointAt( dwdx * this.data[i][0], dhdy * this.data[i][1] );
+    for( var i = 0; i < this.data.length; i++ ) {
+        if ( this.data[i][0] >= this.xBounds[0]  && this.data[i][0] <= this.xBounds[1] ) {            
+            this.drawDataPointAt( dwdx * (this.data[i][0] - this.xBounds[0]), dhdy * (this.data[i][1] - this.yBounds[0]) );
+        }
+    }
+    
 };
 
 Graph.prototype.drawDataPointAt = function( w, h ) {
@@ -294,6 +307,11 @@ Graph.prototype.interpolate = function(x) {
     for( var j = 0; j < this.data.length; j++ ) {
 	      if( dataWLeft == null || (this.data[j][0] > this.data[dataWLeft][0] && this.data[j][0] <= x) )
 	          dataWLeft = j;
+    }
+
+    // Lucky us. Exact hit. No interpolation required.
+    if( this.data[dataWLeft][0] === x ) {
+        return this.data[dataWLeft][1];
     }
 
     if( dataWLeft < this.data.length - 1 )
@@ -335,10 +353,10 @@ Graph.prototype.drawWMarker = function( w, xString ) {
 
 Graph.prototype.drawXMarkersWithLabeler = function() {
     var xMarkers = this.labeler( this.xBounds, this.Nmarkers );
-    var dxdw = this.xRange() / this.wRange();
+    var dxdw = this.dxdw();
 
     for( var i = 0; i < xMarkers.length; i++ ) {
-	      var markerW = xMarkers[i][0] / dxdw;
+	      var markerW = (xMarkers[i][0] - this.xBounds[0]) / dxdw;
 	      var xString = xMarkers[i][1];
 	      this.drawWMarker( markerW, xString );
     }

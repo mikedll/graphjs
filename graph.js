@@ -39,10 +39,10 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.yBounds = yBounds;
 
     // TODO: handle when graph is too small
-    this.xLabelHeight = 20;
+    this.xLabelHeight = 40;
     this.yLabelWidth = 60;
     this.yLabelPadding = 10;
-    this.dataPointcircleRadius = 5;
+    this.dataPointcircleRadius = 3;
     this.lineWidth = 2;
 
     this.upperPadding = this.rightPadding = 20;
@@ -148,6 +148,27 @@ Graph.prototype.zoom = function(delta) {
     this.xBounds[1] -= ((this.xRange() * .2) / factor);
     this.yBounds[0] += ((this.yRange() * .2) / factor);
     this.yBounds[1] -= ((this.yRange() * .2) / factor);
+    this.redraw();
+};
+
+Graph.prototype.moveXBounds = function(mouseOffset) {
+    var dx = this.xRange() * (mouseOffset / this.wRange());
+
+    if( !this.isFunctional() ) {
+        var minX = this.data[ 0 ][0];
+        var maxX = this.data[ this.data.length - 1 ][0];
+
+        if((this.xBounds[0] + dx) > maxX) {
+            dx = maxX - this.xBounds[0];
+        }
+
+        if((this.xBounds[1] + dx) < minX) {
+            dx = this.xBounds[1] - minX;
+        }
+    }
+
+    this.xBounds[0] += dx;
+    this.xBounds[1] += dx;
     this.redraw();
 };
 

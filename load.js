@@ -1,5 +1,15 @@
 
+
 var g1, g2;
+
+var beginningDrag = false, isDragging = false, lastX = 0;
+
+
+function dd(m) {
+    console.debug("********************");
+    $.each( arguments, function( i, v ) { console.debug( v ); } );
+    console.debug("********************");
+}
 
 function mouseScroll(e) {
 
@@ -23,7 +33,7 @@ function quagressXLabeler( baseDate ) {
 
     var iToDate = function( i ) {
 	      var d = Date.parse( baseDate ).add(parseInt( i )).days();
-	      return d.toString("MMM d");
+	      return d.toString("MMM d, yyyy");
     };
 
     var f = function( xRange, markerCount ) {
@@ -35,10 +45,11 @@ function quagressXLabeler( baseDate ) {
 	      if( step == 0 ) step = 1;
 
 	      var init;
+
 	      if( step == 1 )
-	          init = 1;
+	          init = L + 1;
 	      else
-	          init = Math.floor(step / 2);
+	          init = L + Math.floor(step / 2);
 
 	      for( var i = init; i < U; i += step ) {
 	          markers.push( [ i, iToDate( i ) ] );
@@ -56,19 +67,56 @@ function handleMouseOver(e) {
 
 function handleMouseOut(e) {
     g1.onMouseOut();
-    $('#g1text').text("");
+    $('#g1text').text("-");
 };
 
+function handleMouseDown(e) {
+    dd('mouse is down');
+    beginningDrag = true;
+    isDragging = true;
+};
+
+function handleMouseUp(e) {
+    isDragging = false;
+    beginningDrag = false;
+};
+
+
+function globalHandleMouseDown(e) {
+    dd('global mouse is down');
+    if(beginningDrag) {
+        beginningDrag = false;
+        lastX = e.offsetX;
+        dd("starting drag at ", lastX);
+    }
+};
+
+function globalHandleMouseUp(e) {
+    dd("global mouseup");
+    isDragging = false;
+    beginningDrag = false;
+};
+
+function globalHandleMouseMove(e) {
+    if(isDragging) {
+        var move = (lastX - e.offsetX);
+        lastX = e.offsetX;
+        g1.moveXBounds(move);
+    }
+}
+
 function handleMouseMove(e) {
-    var vals = g1.getInterpolatedValuesOnMouseMoveAt( e.offsetX, e.offsetY );
-    if(vals == null) return;
+    if(!isDragging) {
+        var vals = g1.getInterpolatedValuesOnMouseMoveAt( e.offsetX, e.offsetY );
+        if(vals == null) return;
 
-    var x = vals[0], y = vals[1];
+        var x = vals[0], y = vals[1];
 
-    x = x.toFixed(2);
-    y = y.toFixed(2);
+        x = x.toFixed(2);
+        y = y.toFixed(2);
 
-    $('#g1text').text("X = " + x + ", Y = " + y);
+        $('#g1text').text("X = " + x + ", Y = " + y);
+    }
 };
 
 function loadUp() {
@@ -84,10 +132,16 @@ function loadUp() {
     g2.renderInCanvas('graph2');
 
     $('#graph1')
+        .bind('mousedown', handleMouseDown )
+        .bind('mouseup', handleMouseUp )
         .bind('mousemove', handleMouseMove )
         .bind('mouseover', handleMouseOver )
         .bind('mouseout', handleMouseOut );
-        
+
+    $(document)
+        .bind('mousemove', globalHandleMouseMove )
+        .bind('mouseup', globalHandleMouseUp )
+        .bind('mousedown', globalHandleMouseDown );
 
     $('#graph2')
         .bind('mousewheel', mouseScroll )

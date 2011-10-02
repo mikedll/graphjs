@@ -13,7 +13,8 @@ function gdd( s, level ) {
 function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.options = {
 	      padX: true,
-        domainConceptuallyIntegers: true
+        domainConceptuallyIntegers: true,
+        minimumYRange: 3.0
     };
     this.ctx = null;
     this.height = this.width = 0;
@@ -137,6 +138,37 @@ Graph.prototype.dxdw = function() {
     return this.xRange() / this.wRange();
 };
 
+Graph.prototype.maxX = function() {
+    if (this.isFunctional()) return null;
+    return this.data[ this.data.length - 1 ][0];    
+};
+
+Graph.prototype.minX = function() {
+    if (this.isFunctional()) return null;
+    return this.data[0][0];
+};
+
+Graph.prototype.minMaxYInXBounds = function() {
+    if (this.isFunctional() ) return null;
+
+    var inXBounds = false;
+    var maxY = null, minY = null;
+    for(var i = 0; i < this.data.length; i++ ) {
+        if(!inXBounds && this.data[i][0] >= this.xBounds[0]) {
+            inXBounds = true;
+        }
+
+        if(inXBounds) {
+            if( maxY === null || maxY < this.data[i][1] ) maxY = this.data[i][1];
+            if( minY === null || minY > this.data[i][1] ) minY = this.data[i][1];
+        }
+
+        if(inXBounds && this.data[i][0] > this.xBounds[1])
+            break;
+    }
+    return [minY, maxY];
+};
+
 Graph.prototype.redraw = function() {
     this.ctx.clearRect( 0, 0, this.width, this.height);
     this.renderInCanvas();
@@ -151,24 +183,51 @@ Graph.prototype.zoom = function(delta) {
     this.redraw();
 };
 
+Graph.prototype.autoFixYAxis = function() {
+    var minMaxY = this.minMaxYInXBounds();
+    var newVisibleDataRange = (minMaxY[1] - minMaxY[0]);
+    if (newVisibleDataRange === 0) newVisibleDataRange = this.options.minimumYRange;
+    this.yBounds[0] = minMaxY[0] - (newVisibleDataRange * 0.1);
+    this.yBounds[1] = minMaxY[1] + (newVisibleDataRange * 0.1);
+};
+
+Graph.prototype.zoomAndAutofitYAxis = function(delta) {
+    var factor = ((delta > 0) ? this.zoomFactorPercent : -this.zoomFactorPercent);
+    this.xBounds[0] += ((this.xRange() * .2) / factor);
+    this.xBounds[1] -= ((this.xRange() * .2) / factor);
+
+    if( !this.isFunctional() ) {
+        if( this.xBounds[0] > this.maxX() ) {
+            this.xBounds[0] = this.maxX();
+        }
+
+        if( this.xBounds[1] < this.minX() ) {
+            this.xBounds[1] = this.minX();
+        }
+    }
+
+    this.autoFixYAxis();
+    this.redraw();    
+};
+
 Graph.prototype.moveXBounds = function(mouseOffset) {
     var dx = this.xRange() * (mouseOffset / this.wRange());
 
     if( !this.isFunctional() ) {
-        var minX = this.data[ 0 ][0];
-        var maxX = this.data[ this.data.length - 1 ][0];
-
-        if((this.xBounds[0] + dx) > maxX) {
-            dx = maxX - this.xBounds[0];
+        if((this.xBounds[0] + dx) > this.maxX()) {
+            dx = this.maxX() - this.xBounds[0];
         }
 
-        if((this.xBounds[1] + dx) < minX) {
-            dx = this.xBounds[1] - minX;
+        if((this.xBounds[1] + dx) < this.minX()) {
+            dx = this.xBounds[1] - this.minX();
         }
     }
 
     this.xBounds[0] += dx;
     this.xBounds[1] += dx;
+
+    this.autoFixYAxis();
+
     this.redraw();
 };
 

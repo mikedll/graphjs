@@ -12,7 +12,6 @@ function dd(m) {
 }
 
 function mouseScroll(e) {
-
     var delta = 0;
     if (e.wheelDelta) {
         delta = e.wheelDelta/120; 

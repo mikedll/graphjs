@@ -18,26 +18,8 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     };
     this.ctx = null;
     this.height = this.width = 0;
-    this.func = null;
-    this.data = null;
+    this.reloadData( xBounds, yBounds, funcOrData, labeler, false, null);
 
-    if( funcOrData instanceof Array ) {
-	      this.data = funcOrData;	
-	      if( this.data.length == 0 ) {
-	          this.data = [1,0];
-	      }
-    }
-    else if ( funcOrData instanceof Function )
-	  this.func = funcOrData;
-    else
-	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
-
-    this.xBounds = xBounds;
-    if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
-	      this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
-	      this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
-    }
-    this.yBounds = yBounds;
 
     // TODO: handle when graph is too small
     this.xLabelHeight = 40;
@@ -52,8 +34,6 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.markerSize = 10;
 
     this.zoomFactorPercent = 2;
-
-    this.labeler = labeler;
 };
 
 Graph.prototype.isFunctional = function() {
@@ -148,24 +128,29 @@ Graph.prototype.minX = function() {
     return this.data[0][0];
 };
 
-Graph.prototype.minMaxYInXBounds = function() {
+Graph.prototype.minYGlobalMaxYInXBoundsOrGlobal = function() {
     if (this.isFunctional() ) return null;
 
     var inXBounds = false;
-    var maxY = null, minY = null;
+    var maxY = null, minY = null, globalMaxY = null;
     for(var i = 0; i < this.data.length; i++ ) {
         if(!inXBounds && this.data[i][0] >= this.xBounds[0]) {
             inXBounds = true;
         }
 
+        if( minY === null || minY > this.data[i][1] ) minY = this.data[i][1];
+        if( globalMaxY === null || globalMaxY < this.data[i][1] ) globalMaxY = this.data[i][1];
+
         if(inXBounds) {
             if( maxY === null || maxY < this.data[i][1] ) maxY = this.data[i][1];
-            if( minY === null || minY > this.data[i][1] ) minY = this.data[i][1];
         }
 
         if(inXBounds && this.data[i][0] > this.xBounds[1])
             break;
     }
+
+    if(maxY === null) maxY = globalMaxY;
+
     return [minY, maxY];
 };
 
@@ -184,7 +169,7 @@ Graph.prototype.zoom = function(delta) {
 };
 
 Graph.prototype.autoFixYAxis = function() {
-    var minMaxY = this.minMaxYInXBounds();
+    var minMaxY = this.minYGlobalMaxYInXBoundsOrGlobal();
     var newVisibleDataRange = (minMaxY[1] - minMaxY[0]);
     if (newVisibleDataRange === 0) newVisibleDataRange = this.options.minimumYRange;
     this.yBounds[0] = minMaxY[0] - (newVisibleDataRange * 0.1);
@@ -212,16 +197,6 @@ Graph.prototype.zoomAndAutofitYAxis = function(delta) {
 
 Graph.prototype.moveXBounds = function(mouseOffset) {
     var dx = this.xRange() * (mouseOffset / this.wRange());
-
-    if( !this.isFunctional() ) {
-        if((this.xBounds[0] + dx) > this.maxX()) {
-            dx = this.maxX() - this.xBounds[0];
-        }
-
-        if((this.xBounds[1] + dx) < this.minX()) {
-            dx = this.xBounds[1] - this.minX();
-        }
-    }
 
     this.xBounds[0] += dx;
     this.xBounds[1] += dx;
@@ -271,7 +246,7 @@ Graph.prototype.changeFunction = function(f) {
     this.redraw();
 };
 
-Graph.prototype.reload = function( xBounds, yBounds, funcOrData, labeler ) {
+Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday ) {
     this.func = null;
     this.data = null;
 
@@ -286,15 +261,26 @@ Graph.prototype.reload = function( xBounds, yBounds, funcOrData, labeler ) {
     else
 	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
 
-    this.xBounds = xBounds;
-    if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
-	      this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
-	      this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
+    if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
+        if( defaultToday !== null ) {
+            this.xBounds = [defaultToday - 3, defaultToday + 4];            
+        }
+        else {
+            this.xBounds = xBounds;
+            if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
+	              this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
+	              this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
+            }
+        }
     }
     this.yBounds = yBounds;
 
     this.labeler = labeler;
 
+};
+
+Graph.prototype.reload = function( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday ) {
+    this.reloadData( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday );
     this.redraw();    
 };
 
@@ -325,6 +311,9 @@ Graph.prototype.drawGraphLine = function() {
     var dhdy = this.dhdy();
     var dxdw = this.dxdw();
 
+
+    var didDrawSomething = false;
+
     this.ctx.beginPath();
     for( var w = 0; w < this.wRange(); w++ ) {
 	      var x = this.xBounds[0] + dxdw * w;
@@ -339,6 +328,9 @@ Graph.prototype.drawGraphLine = function() {
 	          gdd("Y undefined x == " + x, 0);
 	          continue;
 	      }
+        else {
+            didDrawSomething = true;
+        }
 
 	      var h = dhdy * (y - this.yBounds[0]);
 
@@ -350,9 +342,30 @@ Graph.prototype.drawGraphLine = function() {
 	      if( w == 0) this.ctx.moveTo( this.insetW(w),this.insetH(h) );
 	      else this.ctx.lineTo( this.insetW(w), this.insetH(h) );
     }
-
     this.ctx.stroke();
     this.ctx.closePath();
+
+    if( !didDrawSomething && this.data.length != 0 ) {
+        var refW = null, y, h, refX = null, left = null;
+
+        if( this.xBounds[0] > this.maxX() ) {
+            refX = this.maxX();
+            left = true;
+            refW = 10;
+        }
+        else if ( this.xBounds[1] < this.minX() ) {
+            refX = this.minX();
+            refW = this.wRange() - 11;
+            left = false;
+        }
+
+        if(refW != null && refX != null) {
+	          y = this.isFunctional() ? this.func( refX ) : this.interpolate( refX );
+            h = dhdy * (y - this.yBounds[0]);
+            this.drawArrowAt( refW, h, left );            
+        }
+
+    }
 };
 
 Graph.prototype.drawDataPoints = function() {
@@ -365,6 +378,18 @@ Graph.prototype.drawDataPoints = function() {
         }
     }
     
+};
+
+Graph.prototype.drawArrowAt = function( w, h, faceLeft ) {
+    var direction = ( faceLeft == true ? 1 : -1 );
+    this.ctx.lineWidth = 3;
+    
+
+    this.drawLine( this.insetWH(w, h), this.insetWH(w + (direction * 14), h) );
+    this.drawLine( this.insetWH(w, h - 1), this.insetWH(w + (direction * 5), h + 5) );
+    this.drawLine( this.insetWH(w, h + 1), this.insetWH(w + (direction * 5), h - 5) );
+
+    this.ctx.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.drawDataPointAt = function( w, h ) {
@@ -472,6 +497,7 @@ Graph.prototype.drawVeryThinLine = function(from, to ) {
 
 Graph.prototype.drawLine = function(from,to) {
     this.ctx.beginPath();
+
     this.ctx.moveTo(from[0],from[1]);
     this.ctx.lineTo(to[0], to[1]);
     this.ctx.stroke();

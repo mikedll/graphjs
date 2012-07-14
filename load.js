@@ -25,40 +25,48 @@ function mouseScroll(e) {
     g2.zoom( delta );
 }
 
-/**
- * Assumes xRange spans 3 points.* 
+
+/* DO NOT MODIFY. This file was compiled Sat, 14 Jul 2012 10:38:51 GMT from
+ * /home/mrmike/work/quagress/app/coffeescripts/labeller.coffee
  */
-function quagressXLabeler( baseDate ) {
 
-    var iToDate = function( i ) {
-	      var d = Date.parse( baseDate ).add(parseInt( i )).days();
-	      return d.toString("MMM d, yyyy");
-    };
-
-    var f = function( xRange, markerCount ) {
-	      var markers = [];
-	      var U = Math.ceil( xRange[1] );
-	      var L = Math.floor( xRange[0] );
-	      var step = Math.floor( (U - L) / markerCount );
-
-	      if( step == 0 ) step = 1;
-
-	      var init;
-
-	      if( step == 1 )
-	          init = L + 1;
-	      else
-	          init = L + Math.floor(step / 2);
-
-	      for( var i = init; i < U; i += step ) {
-	          markers.push( [ i, iToDate( i ) ] );
-	      }
-
-	      return markers;
-    };
-
-    return f;
-};
+var Labeller;
+Labeller = (function() {
+  function Labeller(baseDate) {
+    this.baseDate = baseDate;
+  }
+  Labeller.prototype.iToDate = function(i) {
+    var d;
+    d = Date.parse(this.baseDate).add(parseInt(i)).days();
+    return d.toString("MMM d, yyyy");
+  };
+  Labeller.prototype.labelRange = function(xRange, markerCount) {
+    var L, U, i, init, markers, step;
+    init = 0;
+    step = 0.0;
+    U = Math.ceil(xRange[1]);
+    L = Math.floor(xRange[0]);
+    step = Math.floor((U - L) / markerCount);
+    if (step === 0) {
+      step = 1;
+    }
+    if (step === 1) {
+      init = L + 1;
+    } else {
+      init = L + Math.floor(step / 2);
+    }
+    markers = (function() {
+      var _ref, _results;
+      _results = [];
+      for (i = init, _ref = U + 1; init <= _ref ? i <= _ref : i >= _ref; i += step) {
+        _results.push([i, this.iToDate(i)]);
+      }
+      return _results;
+    }).call(this);
+    return markers;
+  };
+  return Labeller;
+})();
 
 function handleMouseOver(e) {
     console.debug("enter");
@@ -121,7 +129,7 @@ function handleMouseMove(e) {
 function loadUp() {
 
     var data = [ [-5,2], [1,1], [4,2], [5,3], [6,2], [8,3] ];
-    g1 = new Graph( [0,7], [0,4], data, quagressXLabeler("2010-10-19") );
+    g1 = new Graph( [0,7], [0,4], data, new Labeller("2010-10-19") );
     g1.renderInCanvas('graph1');
 
     function ligand(Kd) {

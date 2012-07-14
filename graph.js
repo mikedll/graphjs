@@ -10,20 +10,22 @@ function gdd( s, level ) {
 	      console.debug( s );
 }
 
-function Graph( xBounds, yBounds, funcOrData, labeler ) {
+function Graph( xBounds, yBounds, funcOrData, logs, labeler ) {
+
     this.options = {
 	      padX: true,
         domainConceptuallyIntegers: true,
-        minimumYRange: 3.0
+        minimumYRange: 3.0,
+        maxXRange: 36525,
+        minXRange: 6
     };
     this.ctx = null;
     this.height = this.width = 0;
-    this.reloadData( xBounds, yBounds, funcOrData, labeler, false, null);
-
+    this.reloadData( xBounds, yBounds, funcOrData, logs, labeler, false, null);
 
     // TODO: handle when graph is too small
     this.xLabelHeight = 40;
-    this.yLabelWidth = 60;
+    this.yLabelWidth = 70;
     this.yLabelPadding = 10;
     this.dataPointcircleRadius = 3;
     this.lineWidth = 2;
@@ -33,7 +35,11 @@ function Graph( xBounds, yBounds, funcOrData, labeler ) {
     this.Nmarkers = 6;
     this.markerSize = 10;
 
-    this.zoomFactorPercent = 2;
+    this.zoomFactorPercent = 40;
+};
+
+Graph.prototype.currentLog = function() {
+    return this.logs[ this.currentLogI ];
 };
 
 Graph.prototype.isFunctional = function() {
@@ -161,10 +167,10 @@ Graph.prototype.redraw = function() {
 
 Graph.prototype.zoom = function(delta) {
     var factor = ((delta > 0) ? this.zoomFactorPercent : -this.zoomFactorPercent);
-    this.xBounds[0] += ((this.xRange() * .2) / factor);
-    this.xBounds[1] -= ((this.xRange() * .2) / factor);
-    this.yBounds[0] += ((this.yRange() * .2) / factor);
-    this.yBounds[1] -= ((this.yRange() * .2) / factor);
+    this.xBounds[0] += this.xRange() * (factor / 100.0);
+    this.xBounds[1] -= this.xRange() * (factor / 100.0);
+    this.yBounds[0] += this.yRange() * (factor / 100.0);
+    this.yBounds[1] -= this.yRange() * (factor / 100.0);
     this.redraw();
 };
 
@@ -172,14 +178,21 @@ Graph.prototype.autoFixYAxis = function() {
     var minMaxY = this.minYGlobalMaxYInXBoundsOrGlobal();
     var newVisibleDataRange = (minMaxY[1] - minMaxY[0]);
     if (newVisibleDataRange === 0) newVisibleDataRange = this.options.minimumYRange;
-    this.yBounds[0] = minMaxY[0] - (newVisibleDataRange * 0.1);
+    this.yBounds[0] = (minMaxY[0] >= 0) ? 0 : (minMaxY[0] - (newVisibleDataRange * 0.1));
     this.yBounds[1] = minMaxY[1] + (newVisibleDataRange * 0.1);
 };
 
 Graph.prototype.zoomAndAutofitYAxis = function(delta) {
     var factor = ((delta > 0) ? this.zoomFactorPercent : -this.zoomFactorPercent);
-    this.xBounds[0] += ((this.xRange() * .2) / factor);
-    this.xBounds[1] -= ((this.xRange() * .2) / factor);
+
+    var newXmin = this.xBounds[0] + (this.xRange() * (factor / 100.0)), newXmax = this.xBounds[1] - (this.xRange() * (factor / 100.0));
+
+    var newRange = (newXmax - newXmin);
+
+    if( newRange <= this.options.maxXRange && newRange >= this.options.minXRange ) {
+        this.xBounds[0] = newXmin;
+        this.xBounds[1] = newXmax;
+    }
 
     if( !this.isFunctional() ) {
         if( this.xBounds[0] > this.maxX() ) {
@@ -210,6 +223,9 @@ Graph.prototype.onMouseOut = function() {
     this.redraw();
 };
 
+/*
+ * Returns [x, y, label for x if labeller is defined else null]
+ */
 Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY ) {
     var w = this.screenXOffsetToW( screenX );
     var h = this.screenYOffsetToH( screenY );
@@ -229,7 +245,7 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
         w = (1.0 / this.dxdw()) * (x - this.xBounds[0]);
     }
 
-    var y = this.interpolate( x );
+    var y = this.solve( x );
     if(y  === null) return null;
     hFinal = this.dhdy() * (y - this.yBounds[0]);
 
@@ -238,7 +254,7 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
     // Not sure if this one really helps.
     // this.drawVeryThinLine( this.insetWH(0,hFinal), this.insetWH(this.wRange()-1,hFinal) );
 
-    return [x, y];
+    return [x, y, (this.labeller == null ? null : this.labeller.iToDate(x)) ];
 };
 
 Graph.prototype.changeFunction = function(f) {
@@ -246,7 +262,7 @@ Graph.prototype.changeFunction = function(f) {
     this.redraw();
 };
 
-Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday ) {
+Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday ) {
     this.func = null;
     this.data = null;
 
@@ -260,6 +276,9 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, labeler, re
 	  this.func = funcOrData;
     else
 	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
+
+    this.logs = logs;
+    this.currentLogI = 0;
 
     if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
         if( defaultToday !== null ) {
@@ -275,12 +294,12 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, labeler, re
     }
     this.yBounds = yBounds;
 
-    this.labeler = labeler;
+    this.labeller = labeler;
 
 };
 
-Graph.prototype.reload = function( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday ) {
-    this.reloadData( xBounds, yBounds, funcOrData, labeler, retainXAxis, defaultToday );
+Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday ) {
+    this.reloadData( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday );
     this.redraw();    
 };
 
@@ -322,7 +341,7 @@ Graph.prototype.drawGraphLine = function() {
             gdd( "Seeking point for x = " + x, 0);
         }
 
-	      var y = this.isFunctional() ? this.func(x) : this.interpolate( x );
+	      var y = this.isFunctional() ? this.func(x) : this.solve( x );
 
 	      if( y == null ) {
 	          gdd("Y undefined x == " + x, 0);
@@ -360,7 +379,7 @@ Graph.prototype.drawGraphLine = function() {
         }
 
         if(refW != null && refX != null) {
-	          y = this.isFunctional() ? this.func( refX ) : this.interpolate( refX );
+	          y = this.isFunctional() ? this.func( refX ) : this.solve( refX );
             h = dhdy * (y - this.yBounds[0]);
             this.drawArrowAt( refW, h, left );            
         }
@@ -401,7 +420,12 @@ Graph.prototype.drawDataPointAt = function( w, h ) {
 
 };
 
-Graph.prototype.interpolate = function(x) {
+/*
+ * This will interpolate if there is no match for this x in the domain,
+ * or it'll return 0 if the graph is accumulative and there is no match for this x in the domain.
+ * The interpolation needs work, though.
+ */
+Graph.prototype.solve = function(x) {
     var dataWLeft = null, dataWRight = null;
 
     if( this.data.length == 0 || x < this.data[0][0] ) {
@@ -447,7 +471,7 @@ Graph.prototype.markerString = function( offset, range, markerCount, markerIndex
 };
 
 Graph.prototype.drawMarkers = function() {
-    (this.labeler == null) ? this.drawXMarkers() : this.drawXMarkersWithLabeler();
+    (this.labeller == null) ? this.drawXMarkers() : this.drawXMarkersWithLabeler();
     this.drawYMarkers();
 };
 
@@ -457,7 +481,7 @@ Graph.prototype.drawWMarker = function( w, xString ) {
 };
 
 Graph.prototype.drawXMarkersWithLabeler = function() {
-    var xMarkers = this.labeler( this.xBounds, this.Nmarkers );
+    var xMarkers = this.labeller.labelRange( this.xBounds, this.Nmarkers );
     var dxdw = this.dxdw();
 
     for( var i = 0; i < xMarkers.length; i++ ) {

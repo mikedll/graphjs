@@ -10,7 +10,7 @@ function gdd( s, level ) {
 	      console.debug( s );
 }
 
-function Graph( xBounds, yBounds, funcOrData, logs, labeler ) {
+function Graph( xBounds, yBounds, funcOrData, logs, labeller ) {
 
     this.options = {
 	      padX: true,
@@ -21,7 +21,7 @@ function Graph( xBounds, yBounds, funcOrData, logs, labeler ) {
     };
     this.ctx = null;
     this.height = this.width = 0;
-    this.reloadData( xBounds, yBounds, funcOrData, logs, labeler, false, null);
+    this.labeller = labeller;
 
     // TODO: handle when graph is too small
     this.xLabelHeight = 40;
@@ -36,6 +36,11 @@ function Graph( xBounds, yBounds, funcOrData, logs, labeler ) {
     this.markerSize = 10;
 
     this.zoomFactorPercent = 40;
+
+    // Null, or a [xBegin, xEnd] array where xBegin and xEnd are in xBounds
+    this.highlightRange = null;
+
+    this.reloadData( xBounds, yBounds, funcOrData, logs, null, false, null);
 };
 
 Graph.prototype.currentLog = function() {
@@ -81,7 +86,15 @@ Graph.prototype.insetW = function(w) {
     return (this.yLabelWidth + w);
 };
 
-Graph.prototype.screenYOffsetToH = function( screenYOffset ) {
+Graph.prototype.wToX = function(w) {
+    return this.xBounds[0] + ((w - this.yLabelWidth) * this.dxdw());
+};
+
+Graph.prototype.xToW = function(x) {
+    return (x - this.xBounds[0]) / this.dxdw();
+};
+
+Graph.prototype.yOffsetToInsetH = function( screenYOffset ) {
     if( screenYOffset < this.upperPadding ) return null;
 
     var rightSideUp = this.height - screenYOffset;
@@ -90,7 +103,7 @@ Graph.prototype.screenYOffsetToH = function( screenYOffset ) {
     return rightSideUp - this.xLabelHeight;
 };
 
-Graph.prototype.screenXOffsetToW = function( screenXOffset ) {
+Graph.prototype.offsetToInsetW = function( screenXOffset ) {
     if(screenXOffset < this.yLabelWidth) return null;
     if(screenXOffset > this.width - this.rightPadding) return null;
     return screenXOffset - this.yLabelWidth;
@@ -204,8 +217,132 @@ Graph.prototype.zoomAndAutofitYAxis = function(delta) {
         }
     }
 
+    if(this.labeller != null) this.labeller.changeStep( this.xBounds, this.Nmarkers );
     this.autoFixYAxis();
     this.redraw();    
+};
+
+Graph.prototype.killHighlight = function() {
+    if(this.highlightRange == null) return false;
+
+    this.highlightRange = null;
+    return true;
+};
+
+Graph.prototype.startHighlight = function(canvasOffsetX) {
+    this.highlightRange = null;
+    return this.moveHighlight(canvasOffsetX);
+};
+
+Graph.prototype.stopHighlight = function(canvasOffsetX) {
+    if(this.highlightRange[0] == this.highlightRange[1]) this.highlightRange = null;
+};
+
+Graph.prototype.clickedHighlight = function(canvasOffsetX) {
+    if(this.highlightRange == null) return false;
+    var x = this.wToX(canvasOffsetX);
+    return(this.highlightRange[0] <= x && x <= this.highlightRange[1]);
+};
+
+Graph.prototype.strafeHighlight = function(mouseOffset) {
+    if(this.highlightRange == null) {
+        throw "Called strafehighlight when highlight is no active.";
+    }
+
+    var dx = mouseOffset * this.dxdw();
+    
+    this.highlightRange[0] += dx;
+    this.highlightRange[1] += dx;
+    this.redraw();
+};
+
+Graph.prototype.moveHighlight = function(canvasOffsetX) {
+    var x = this.wToX(canvasOffsetX);
+
+    if( this.options.domainConceptuallyIntegers ) x = Math.round( x );
+
+    if(x < this.xBounds[0]) x = this.xBounds[0];
+    if(x > this.xBounds[1]) x = this.xBounds[1];
+
+    if(this.highlightRange == null) {
+        this.highlightRange = [x, x];
+    }
+    else {
+        if(this.highlightRange.length != 2) throw "Internal app error: Expected highlightRange to have at least 2 values.";
+        this.highlightRange[1] = x;
+    }
+
+    this.redraw();
+};
+
+Graph.prototype.getStatsOfHighlight = function() {
+    var bounds = this.getHighlightXBounds();
+    if(bounds == null) return 0;
+
+    
+    var sum = 0, count = 0, avg = null;
+        
+    if( this.data instanceof Array && this.options.domainConceptuallyIntegers ) {
+        var j = 0;
+        for(var x = Math.ceil(bounds[0]); x <= Math.floor(bounds[1]) && j < this.data.length; x++) {
+            while(j < this.data.length) {
+                if(this.data[j][0] >= x) {
+                    break;
+                }
+                j++;
+            }
+
+            if(j < this.data.length && this.data[j][0] == x) {
+                sum += this.data[j][1];
+                count += 1;
+            }
+            
+        }
+    }
+    else {
+        // use some calculus? oh well.
+    }
+
+    if(count > 0) {
+        avg = sum / count;
+    }
+    sum = Math.round(sum * 100) / 100;
+    avg = Math.round(avg * 100) / 100;
+
+    return [(this.labeller != null ? this.labeller.iToDate(bounds[0]) : bounds[0]), 
+            (this.labeller != null ? this.labeller.iToDate(bounds[1]) : bounds[1]),
+            sum, 
+            avg];
+};
+
+/*
+ * We cut off the bounds inside the window here.
+ */
+Graph.prototype.getHighlightWBounds = function() {
+    var xBounds = this.getHighlightXBounds();
+    if(xBounds[0] < this.xBounds[0]) xBounds[0] = this.xBounds[0];
+    if(xBounds[1] < this.xBounds[0]) xBounds[1] = this.xBounds[0];
+
+    if(xBounds[0] > this.xBounds[1]) xBounds[0] = this.xBounds[1];
+    if(xBounds[1] > this.xBounds[1]) xBounds[1] = this.xBounds[1];
+    return [this.xToW( xBounds[0] ), this.xToW( xBounds[1] )];
+};
+
+Graph.prototype.getHighlightXBounds = function() {
+    if(this.highlightRange == null) {
+        return null;   
+    }
+
+    var xMin, xMax;
+    if(this.highlightRange[0] <= this.highlightRange[1]) {
+        xMin = this.highlightRange[0];
+        xMax = this.highlightRange[1];
+    }
+    else {
+        xMin = this.highlightRange[1];
+        xMax = this.highlightRange[0];
+    }
+    return [xMin, xMax];
 };
 
 Graph.prototype.moveXBounds = function(mouseOffset) {
@@ -215,7 +352,6 @@ Graph.prototype.moveXBounds = function(mouseOffset) {
     this.xBounds[1] += dx;
 
     this.autoFixYAxis();
-
     this.redraw();
 };
 
@@ -227,8 +363,8 @@ Graph.prototype.onMouseOut = function() {
  * Returns [x, y, label for x if labeller is defined else null]
  */
 Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY ) {
-    var w = this.screenXOffsetToW( screenX );
-    var h = this.screenYOffsetToH( screenY );
+    var w = this.offsetToInsetW( screenX );
+    var h = this.yOffsetToInsetH( screenY );
     var wFinal = w, hFinal;
 
     // This can theoretically be optimized if we keep track of
@@ -242,19 +378,19 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
     var x = this.dxdw() * w + this.xBounds[0];
     if( this.options.domainConceptuallyIntegers ) {
         x = Math.round( x );
-        w = (1.0 / this.dxdw()) * (x - this.xBounds[0]);
+        w = this.xToW(x);
     }
 
     var y = this.solve( x );
-    if(y  === null) return null;
-    hFinal = this.dhdy() * (y - this.yBounds[0]);
-
-    this.drawVeryThinLine( this.insetWH(w,0), this.insetWH(w,this.hRange()-1) );
+    // if(y  === null) return null;
+    
+    if(this.highlightRange == null) this.drawVeryThinLine( this.insetWH(w,0), this.insetWH(w,this.hRange()-1) );
 
     // Not sure if this one really helps.
+    // hFinal = this.dhdy() * (y - this.yBounds[0]);
     // this.drawVeryThinLine( this.insetWH(0,hFinal), this.insetWH(this.wRange()-1,hFinal) );
 
-    return [x, y, (this.labeller == null ? null : this.labeller.iToDate(x)) ];
+    return [x, y, (this.labeller == null ? null : this.labeller.iToDateObj(x)) ];
 };
 
 Graph.prototype.changeFunction = function(f) {
@@ -262,7 +398,7 @@ Graph.prototype.changeFunction = function(f) {
     this.redraw();
 };
 
-Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday ) {
+Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday ) {
     this.func = null;
     this.data = null;
 
@@ -292,20 +428,39 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, label
             }
         }
     }
-    this.yBounds = yBounds;
 
-    this.labeller = labeler;
+    if(this.labeller != null && labellerStartDate != null) this.labeller.updateBaseDate( labellerStartDate );
+    if(this.labeller != null) this.labeller.changeStep( this.xBounds, this.Nmarkers );
+
+    this.yBounds = yBounds;
 
 };
 
-Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday ) {
-    this.reloadData( xBounds, yBounds, funcOrData, logs, labeler, retainXAxis, defaultToday );
+Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday ) {
+    this.reloadData( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday );
     this.redraw();    
+};
+
+Graph.prototype.dropContextPointer = function() {
+    this.ctx = null;
+    return;
 };
 
 Graph.prototype.initCanvas = function(id) {
     this.canvasId = id;
     this.ctx = document.getElementById(this.canvasId).getContext('2d');    
+};
+
+Graph.prototype.dump = function() {
+    dd("dumping: ", 
+       this.hRange(), 
+       this.yRange(), 
+       "dhdy: " + this.dhdy(), 
+       "wrange: " + this.wRange(), 
+       "xrange: " + this.xRange(), 
+       "dxdw: " + this.dxdw(), 
+       this.width, 
+       this.height);
 };
 
 Graph.prototype.renderInCanvas = function(id) {
@@ -324,12 +479,13 @@ Graph.prototype.renderInCanvas = function(id) {
     this.drawMarkers();
 
     this.drawAxisLines();
+
+    if(this.highlightRange != null) this.drawHighlight();
 };
 
 Graph.prototype.drawGraphLine = function() {
     var dhdy = this.dhdy();
     var dxdw = this.dxdw();
-
 
     var didDrawSomething = false;
 
@@ -426,6 +582,7 @@ Graph.prototype.drawDataPointAt = function( w, h ) {
  * The interpolation needs work, though.
  */
 Graph.prototype.solve = function(x) {
+
     var dataWLeft = null, dataWRight = null;
 
     if( this.data.length == 0 || x < this.data[0][0] ) {
@@ -471,7 +628,7 @@ Graph.prototype.markerString = function( offset, range, markerCount, markerIndex
 };
 
 Graph.prototype.drawMarkers = function() {
-    (this.labeller == null) ? this.drawXMarkers() : this.drawXMarkersWithLabeler();
+    (this.labeller == null) ? this.drawXMarkers() : this.drawXMarkersWithLabeller();
     this.drawYMarkers();
 };
 
@@ -480,7 +637,7 @@ Graph.prototype.drawWMarker = function( w, xString ) {
     this.ctx.fillText( xString, this.insetW(w), this.canvasInvertsY(this.xLabelHeight / 2));	
 };
 
-Graph.prototype.drawXMarkersWithLabeler = function() {
+Graph.prototype.drawXMarkersWithLabeller = function() {
     var xMarkers = this.labeller.labelRange( this.xBounds, this.Nmarkers );
     var dxdw = this.dxdw();
 
@@ -526,4 +683,13 @@ Graph.prototype.drawLine = function(from,to) {
     this.ctx.lineTo(to[0], to[1]);
     this.ctx.stroke();
     this.ctx.closePath();
+};
+
+Graph.prototype.drawHighlight = function() {
+    var wBounds = this.getHighlightWBounds();
+    var wMin = wBounds[0], wMax = wBounds[1];
+
+    this.ctx.fillStyle = "rgba(245, 255, 139, 0.5)";
+    this.ctx.fillRect(this.insetW(wMin), this.insetH(0), wMax - wMin, this.insetH(this.hRange()) - this.insetH(0));
+
 };

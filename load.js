@@ -11,6 +11,8 @@ function dd(m) {
     console.debug("********************");
 }
 
+
+
 function mouseScroll(e) {
     var delta = 0;
     if (e.wheelDelta) {
@@ -126,7 +128,21 @@ function handleMouseMove(e) {
     }
 };
 
+function windowResize() {
+    var h = $(window).height() - 100;
+    var w = $(window).width() - 100;
+    g1.dropContextPointer();
+    $('.firstContainer')
+        .empty()
+        .append($('<canvas id="graph1" width="' + w + '" height="' + h + '"></canvas>'));
+    g1.renderInCanvas('graph1');
+}
+
 function loadUp() {
+
+    $('.firstContainer')
+        .empty()
+        .append($('<canvas id="graph1" width="800" height="500"></canvas>'));
 
     var data = [ [-5,2], [1,1], [4,2], [5,3], [6,2], [8,3] ];
     g1 = new Graph( [0,7], [0,4], data, new Labeller("2010-10-19") );
@@ -153,6 +169,8 @@ function loadUp() {
     $('#graph2')
         .bind('mousewheel', mouseScroll )
         .bind('DOMMouseScroll', mouseScroll );
+
+    $(window).resize(windowResize);
 
 }
 

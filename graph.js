@@ -398,7 +398,7 @@ Graph.prototype.changeFunction = function(f) {
     this.redraw();
 };
 
-Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday ) {
+Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate ) {
     this.func = null;
     this.data = null;
 
@@ -417,8 +417,8 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, label
     this.currentLogI = 0;
 
     if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
-        if( defaultToday !== null ) {
-            this.xBounds = [defaultToday - 3, defaultToday + 4];            
+        if( defaultDate !== null ) {
+            this.xBounds = [defaultDate - 3, defaultDate + 4];            
         }
         else {
             this.xBounds = xBounds;
@@ -436,8 +436,8 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, label
 
 };
 
-Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday ) {
-    this.reloadData( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultToday );
+Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate ) {
+    this.reloadData( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate );
     this.redraw();    
 };
 

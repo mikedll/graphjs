@@ -19,7 +19,8 @@ function Graph( xBounds, yBounds, funcOrData, logs, labeller ) {
         maxXRange: 36525,
         minXRange: 6
     };
-    this.ctx = null;
+    this.ctxLayer1 = null;
+    this.ctxLayer2 = null;
     this.height = this.width = 0;
     this.labeller = labeller;
 
@@ -29,6 +30,7 @@ function Graph( xBounds, yBounds, funcOrData, logs, labeller ) {
     this.yLabelPadding = 10;
     this.dataPointcircleRadius = 3;
     this.lineWidth = 2;
+    this.comfortableEdgeSpace = 0.15;
 
     this.upperPadding = this.rightPadding = 20;
 
@@ -39,7 +41,8 @@ function Graph( xBounds, yBounds, funcOrData, logs, labeller ) {
 
     // Null, or a [xBegin, xEnd] array where xBegin and xEnd are in xBounds
     this.highlightRange = null;
-
+  
+    this.verticalSpotterAt = null;
     this.reloadData( xBounds, yBounds, funcOrData, logs, null, false, null);
 };
 
@@ -54,16 +57,26 @@ Graph.prototype.isFunctional = function() {
     return null;
 };
 
-Graph.prototype.configureCanvasFont = function() {
-    this.ctx.font = '14px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillStyle = '#fff';
+Graph.prototype.configureCanvas1Font = function() {
+    this.ctxLayer1.font = '14px Arial';
+    this.ctxLayer1.textAlign = 'center';
+    this.ctxLayer1.textBaseline = 'middle';
+    this.ctxLayer1.fillStyle = '#fff';
+
 };
 
-Graph.prototype.configureCanvasLines = function() {    
-    this.ctx.strokeStyle = '#fff';
-    this.ctx.lineWidth = this.lineWidth;
+Graph.prototype.configureCanvas1Lines = function() {    
+    this.ctxLayer1.strokeStyle = '#fff';
+    this.ctxLayer1.lineWidth = this.lineWidth;
+};
+
+Graph.prototype.configureCanvas2 = function() {    
+    this.ctxLayer2.font = '14px Arial';
+    this.ctxLayer2.textAlign = 'center';
+    this.ctxLayer2.textBaseline = 'middle';
+    this.ctxLayer2.fillStyle = '#fff';
+    this.ctxLayer2.strokeStyle = '#fff';
+    this.ctxLayer2.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.getCSSInt = function(node, name) {
@@ -147,6 +160,55 @@ Graph.prototype.minX = function() {
     return this.data[0][0];
 };
 
+Graph.prototype.drawLineOn = function(ctx, from, to) {
+  ctx.beginPath();
+
+  ctx.moveTo(from[0],from[1]);
+  ctx.lineTo(to[0], to[1]);
+  ctx.stroke();
+  ctx.closePath();
+};
+
+Graph.prototype.drawLine = function(from, to) {
+  this.drawLineOn(this.ctxLayer1, from, to);
+};
+
+Graph.prototype.drawLineUI = function(from, to) {
+  this.drawLineOn(this.ctxLayer2, from, to);
+};
+
+/*
+ * Repositions the graph so that x is visible,
+ * and returns related coordinates to x.
+ * 
+ * Updates mouse UI to reflect an interest
+ * in x.
+ * 
+ * Returns [w, y, label if available or null]
+ * 
+ * Assume the domain is an integer domain.
+ */
+Graph.prototype.prepareForActionAtX = function(x) {
+  var lboundXComfort = this.xRange() * this.comfortableEdgeSpace + this.xBounds[0];
+  var uboundXComfort = this.xBounds[1] - this.xRange() * this.comfortableEdgeSpace;
+  
+  if(x < lboundXComfort || x > uboundXComfort) {
+    this.moveXBounds((x - (x < lboundXComfort ? lboundXComfort : uboundXComfort)));
+  }
+
+  var y = this.solve(x);
+  var w = this.xToW(x);
+
+  if(this.highlightRange === null) {
+    this.verticalSpotterAt = w;
+    this.redrawUI();
+  }
+
+  var l = (this.labeller == null ? null : this.labeller.iToDateObj(x));
+
+  return [w, y, l];
+};
+
 Graph.prototype.minYGlobalMaxYInXBoundsOrGlobal = function() {
     if (this.isFunctional() ) return null;
 
@@ -173,9 +235,25 @@ Graph.prototype.minYGlobalMaxYInXBoundsOrGlobal = function() {
     return [minY, maxY];
 };
 
+Graph.prototype.redrawGraph = function() {
+    this.ctxLayer1.clearRect( 0, 0, this.width, this.height);
+    this.renderGraph();
+};
+
+/*
+ * Redraws both the layer 1 main display and the UI.
+ */
 Graph.prototype.redraw = function() {
-    this.ctx.clearRect( 0, 0, this.width, this.height);
-    this.renderInCanvas();
+    this.redrawGraph();
+    this.redrawUI();
+};
+
+/*
+ * Redraws the UI while leaving layer 1 alone.
+ */
+Graph.prototype.redrawUI = function() {
+    this.ctxLayer2.clearRect( 0, 0, this.width, this.height);  
+    this.renderUI();
 };
 
 Graph.prototype.zoom = function(delta) {
@@ -184,6 +262,7 @@ Graph.prototype.zoom = function(delta) {
     this.xBounds[1] -= this.xRange() * (factor / 100.0);
     this.yBounds[0] += this.yRange() * (factor / 100.0);
     this.yBounds[1] -= this.yRange() * (factor / 100.0);
+    this.verticalSpotterAt = null;
     this.redraw();
 };
 
@@ -219,6 +298,7 @@ Graph.prototype.zoomAndAutofitYAxis = function(delta) {
 
     if(this.labeller != null) this.labeller.changeStep( this.xBounds, this.Nmarkers );
     this.autoFixYAxis();
+    this.verticalSpotterAt = null;
     this.redraw();    
 };
 
@@ -253,7 +333,7 @@ Graph.prototype.strafeHighlight = function(mouseOffset) {
     
     this.highlightRange[0] += dx;
     this.highlightRange[1] += dx;
-    this.redraw();
+    this.redrawUI();
 };
 
 Graph.prototype.moveHighlight = function(canvasOffsetX) {
@@ -272,7 +352,7 @@ Graph.prototype.moveHighlight = function(canvasOffsetX) {
         this.highlightRange[1] = x;
     }
 
-    this.redraw();
+    this.redrawUI();
 };
 
 Graph.prototype.getStatsOfHighlight = function() {
@@ -345,9 +425,13 @@ Graph.prototype.getHighlightXBounds = function() {
     return [xMin, xMax];
 };
 
-Graph.prototype.moveXBounds = function(mouseOffset) {
-    var dx = this.xRange() * (mouseOffset / this.wRange());
+Graph.prototype.moveXBoundsByW = function(wOffset) {
+    var dx = this.xRange() * (wOffset / this.wRange());
+    this.moveXBounds(dx);
+};
 
+Graph.prototype.moveXBounds = function(dx) {
+    this.verticalSpotterAt = null;
     this.xBounds[0] += dx;
     this.xBounds[1] += dx;
 
@@ -356,7 +440,8 @@ Graph.prototype.moveXBounds = function(mouseOffset) {
 };
 
 Graph.prototype.onMouseOut = function() {
-    this.redraw();
+    this.verticalSpotterAt = null;
+    this.redrawUI();
 };
 
 /*
@@ -367,11 +452,13 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
     var h = this.yOffsetToInsetH( screenY );
     var wFinal = w, hFinal;
 
-    // This can theoretically be optimized if we keep track of
-    // whether there is already an interpolation line.
-    this.redraw();
-
-    if(w === null || h === null) return null;
+    if(w === null || h === null) {
+      if(this.highlightRange === null && this.verticalSpotterAt !== null) {
+        this.verticalSpotterAt = null;
+        this.redrawUI();
+      }
+      return null;
+    }
 
     gdd( "Picked up w = " + w + ", h = " + h, 0 );
 
@@ -383,18 +470,22 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
 
     var y = this.solve( x );
     // if(y  === null) return null;
-    
-    if(this.highlightRange == null) this.drawVeryThinLine( this.insetWH(w,0), this.insetWH(w,this.hRange()-1) );
+
+    if(this.highlightRange === null && this.verticalSpotterAt !== w) {
+      this.verticalSpotterAt = w;
+      this.redrawUI();
+    }
 
     // Not sure if this one really helps.
     // hFinal = this.dhdy() * (y - this.yBounds[0]);
-    // this.drawVeryThinLine( this.insetWH(0,hFinal), this.insetWH(this.wRange()-1,hFinal) );
+    // this.drawVeryThinLineUI( this.insetWH(0,hFinal), this.insetWH(this.wRange()-1,hFinal) );
 
     return [x, y, (this.labeller == null ? null : this.labeller.iToDateObj(x)) ];
 };
 
 Graph.prototype.changeFunction = function(f) {
     this.func = f;
+    this.verticalSpotterAt = null;
     this.redraw();
 };
 
@@ -438,17 +529,14 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, label
 
 Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate ) {
     this.reloadData( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate );
+    this.verticalSpotterAt = null;
     this.redraw();    
 };
 
-Graph.prototype.dropContextPointer = function() {
-    this.ctx = null;
-    return;
-};
-
-Graph.prototype.initCanvas = function(id) {
-    this.canvasId = id;
-    this.ctx = document.getElementById(this.canvasId).getContext('2d');    
+Graph.prototype.dropContextPointers = function() { 
+  this.ctxLayer1 = null;
+  this.ctxLayer2 = null;
+  return;
 };
 
 Graph.prototype.dump = function() {
@@ -463,12 +551,22 @@ Graph.prototype.dump = function() {
        this.height);
 };
 
-Graph.prototype.renderInCanvas = function(id) {
-    if( this.ctx == null ) { this.initCanvas(id); }
-    this.configureCanvasFont();
-    this.configureCanvasLines();
-    this.width = this.getCSSInt(this.ctx.canvas, 'width');
-    this.height = this.getCSSInt(this.ctx.canvas, 'height');
+Graph.prototype.renderToDom = function(id1, id2) {
+  if( this.ctxLayer1 === null ) { 
+    this.ctxLayer1 = document.getElementById(id1).getContext('2d');
+  }
+  if( this.ctxLayer2 === null ) { 
+    this.ctxLayer2 = document.getElementById(id2).getContext('2d');
+  }
+  this.renderGraph();
+  this.renderUI();
+};
+
+Graph.prototype.renderGraph = function() {
+    this.configureCanvas1Font();
+    this.configureCanvas1Lines();
+    this.width = this.getCSSInt(this.ctxLayer1.canvas, 'width');
+    this.height = this.getCSSInt(this.ctxLayer1.canvas, 'height');
 
     this.drawGraphLine();
 
@@ -479,8 +577,16 @@ Graph.prototype.renderInCanvas = function(id) {
     this.drawMarkers();
 
     this.drawAxisLines();
+    this.renderUI();
+};
 
-    if(this.highlightRange != null) this.drawHighlight();
+Graph.prototype.renderUI = function() {
+    this.configureCanvas2();
+    if(this.highlightRange !== null)
+      this.drawHighlight();
+    else if(this.verticalSpotterAt !== null) {
+      this.drawVeryThinLineUI( this.insetWH(this.verticalSpotterAt,0), this.insetWH(this.verticalSpotterAt,this.hRange()-1) );
+    }
 };
 
 Graph.prototype.drawGraphLine = function() {
@@ -489,7 +595,7 @@ Graph.prototype.drawGraphLine = function() {
 
     var didDrawSomething = false;
 
-    this.ctx.beginPath();
+    this.ctxLayer1.beginPath();
     for( var w = 0; w < this.wRange(); w++ ) {
 	      var x = this.xBounds[0] + dxdw * w;
 
@@ -514,11 +620,11 @@ Graph.prototype.drawGraphLine = function() {
 	          continue;
 	      }
 
-	      if( w == 0) this.ctx.moveTo( this.insetW(w),this.insetH(h) );
-	      else this.ctx.lineTo( this.insetW(w), this.insetH(h) );
+	      if( w == 0) this.ctxLayer1.moveTo( this.insetW(w),this.insetH(h) );
+	      else this.ctxLayer1.lineTo( this.insetW(w), this.insetH(h) );
     }
-    this.ctx.stroke();
-    this.ctx.closePath();
+    this.ctxLayer1.stroke();
+    this.ctxLayer1.closePath();
 
     if( !didDrawSomething && this.data.length != 0 ) {
         var refW = null, y, h, refX = null, left = null;
@@ -557,23 +663,21 @@ Graph.prototype.drawDataPoints = function() {
 
 Graph.prototype.drawArrowAt = function( w, h, faceLeft ) {
     var direction = ( faceLeft == true ? 1 : -1 );
-    this.ctx.lineWidth = 3;
+    this.ctxLayer1.lineWidth = 3;
     
-
     this.drawLine( this.insetWH(w, h), this.insetWH(w + (direction * 14), h) );
     this.drawLine( this.insetWH(w, h - 1), this.insetWH(w + (direction * 5), h + 5) );
     this.drawLine( this.insetWH(w, h + 1), this.insetWH(w + (direction * 5), h - 5) );
 
-    this.ctx.lineWidth = this.lineWidth;
+    this.ctxLayer1.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.drawDataPointAt = function( w, h ) {
-    this.ctx.beginPath();
-	  this.ctx.moveTo( this.insetW(w),this.insetH(h) );
-	  this.ctx.arc( this.insetW(w), this.insetH(h), this.dataPointcircleRadius, 0, 2 * Math.PI );
-    this.ctx.fill();
-    this.ctx.closePath();
-
+  this.ctxLayer1.beginPath();
+  this.ctxLayer1.moveTo( this.insetW(w),this.insetH(h) );
+  this.ctxLayer1.arc( this.insetW(w), this.insetH(h), this.dataPointcircleRadius, 0, 2 * Math.PI );
+  this.ctxLayer1.fill();
+  this.ctxLayer1.closePath();
 };
 
 /*
@@ -634,7 +738,7 @@ Graph.prototype.drawMarkers = function() {
 
 Graph.prototype.drawWMarker = function( w, xString ) {
     this.drawLine( this.insetWH(w,0), this.insetWH(w,this.markerSize) );
-    this.ctx.fillText( xString, this.insetW(w), this.canvasInvertsY(this.xLabelHeight / 2));	
+    this.ctxLayer1.fillText( xString, this.insetW(w), this.canvasInvertsY(this.xLabelHeight / 2));	
 };
 
 Graph.prototype.drawXMarkersWithLabeller = function() {
@@ -664,32 +768,22 @@ Graph.prototype.drawYMarkers = function() {
 	      var yString = this.markerString( this.yBounds[0], this.yRange(), this.Nmarkers, i );
 	      this.drawLine( this.insetWH(0,markerH), this.insetWH(this.markerSize,markerH) );
 
-	      this.ctx.textAlign = 'right';
-	      this.ctx.fillText( yString, this.yLabelWidth  - this.yLabelPadding, this.insetH(markerH) );
-	      this.ctx.textAlign = 'center';
+	      this.ctxLayer1.textAlign = 'right';
+	      this.ctxLayer1.fillText( yString, this.yLabelWidth  - this.yLabelPadding, this.insetH(markerH) );
+	      this.ctxLayer1.textAlign = 'center';
     }
 };
 
-Graph.prototype.drawVeryThinLine = function(from, to ) {
-    this.ctx.lineWidth = 1;
-    this.drawLine(from, to);
-    this.ctx.lineWidth = this.lineWidth;
-};
-
-Graph.prototype.drawLine = function(from,to) {
-    this.ctx.beginPath();
-
-    this.ctx.moveTo(from[0],from[1]);
-    this.ctx.lineTo(to[0], to[1]);
-    this.ctx.stroke();
-    this.ctx.closePath();
+Graph.prototype.drawVeryThinLineUI = function(from, to) {
+    this.ctxLayer2.lineWidth = 1;
+    this.drawLineUI(from, to);
+    this.ctxLayer2.lineWidth = this.lineWidth;
 };
 
 Graph.prototype.drawHighlight = function() {
     var wBounds = this.getHighlightWBounds();
     var wMin = wBounds[0], wMax = wBounds[1];
 
-    this.ctx.fillStyle = "rgba(245, 255, 139, 0.5)";
-    this.ctx.fillRect(this.insetW(wMin), this.insetH(0), wMax - wMin, this.insetH(this.hRange()) - this.insetH(0));
-
+    this.ctxLayer2.fillStyle = "rgba(245, 255, 139, 0.5)";
+    this.ctxLayer2.fillRect(this.insetW(wMin), this.insetH(0), wMax - wMin, this.insetH(this.hRange()) - this.insetH(0));
 };

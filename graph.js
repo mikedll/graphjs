@@ -490,46 +490,45 @@ Graph.prototype.changeFunction = function(f) {
 };
 
 Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate ) {
-    this.func = null;
-    this.data = null;
+  this.func = null;
+  this.data = null;
 
-    if( funcOrData instanceof Array ) {
-	      this.data = funcOrData;	
-	      if( this.data.length == 0 ) {
-	          this.data = [1,0];
-	      }
+  if( funcOrData instanceof Array ) {
+	  this.data = funcOrData;	
+	  if( this.data.length == 0 ) {
+	    this.data = [1,0];
+	  }
+  }
+  else if ( funcOrData instanceof Function )
+	this.func = funcOrData;
+  else
+	  gdd("Expected Array or Function as 3rd parameter to graph constructor.");
+
+  this.logs = logs;
+  this.currentLogI = 0;
+
+  if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
+    this.verticalSpotterAt = null;
+    if( defaultDate !== null ) {
+      this.xBounds = [defaultDate - 3, defaultDate + 4];            
     }
-    else if ( funcOrData instanceof Function )
-	  this.func = funcOrData;
-    else
-	      gdd("Expected Array or Function as 3rd parameter to graph constructor.");
-
-    this.logs = logs;
-    this.currentLogI = 0;
-
-    if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
-        if( defaultDate !== null ) {
-            this.xBounds = [defaultDate - 3, defaultDate + 4];            
-        }
-        else {
-            this.xBounds = xBounds;
-            if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
-	              this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
-	              this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
-            }
-        }
+    else {
+      this.xBounds = xBounds;
+      if( this.options.padX && (this.xBounds[1] - this.xBounds[0] < 3)) {
+	      this.xBounds[0] = Math.floor( this.xBounds[0] ) - 1;
+	      this.xBounds[1] = Math.ceil( this.xBounds[1] ) + 1;
+      }
     }
+  }
 
-    if(this.labeller != null && labellerStartDate != null) this.labeller.updateBaseDate( labellerStartDate );
-    if(this.labeller != null) this.labeller.changeStep( this.xBounds, this.Nmarkers );
+  if(this.labeller != null && labellerStartDate != null) this.labeller.updateBaseDate( labellerStartDate );
+  if(this.labeller != null) this.labeller.changeStep( this.xBounds, this.Nmarkers );
 
-    this.yBounds = yBounds;
-
+  this.yBounds = yBounds;
 };
 
 Graph.prototype.reload = function( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate ) {
     this.reloadData( xBounds, yBounds, funcOrData, logs, labellerStartDate, retainXAxis, defaultDate );
-    this.verticalSpotterAt = null;
     this.redraw();    
 };
 

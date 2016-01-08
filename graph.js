@@ -483,6 +483,14 @@ Graph.prototype.getInterpolatedValuesOnMouseMoveAt = function( screenX, screenY 
     return [x, y, (this.labeller == null ? null : this.labeller.iToDateObj(x)) ];
 };
 
+Graph.prototype.middleX = function() {
+  var x = (this.xBounds[1] - this.xBounds[0]) / 2.0 + this.xBounds[0];
+  if( this.options.domainConceptuallyIntegers ) {
+    x = Math.round( x );
+  }
+  return x;
+};
+
 Graph.prototype.changeFunction = function(f) {
     this.func = f;
     this.verticalSpotterAt = null;

@@ -518,7 +518,7 @@ Graph.prototype.reloadData = function( xBounds, yBounds, funcOrData, logs, label
   if( typeof(this.xBounds) === "undefined" || !retainXAxis ) {
     this.verticalSpotterAt = null;
     if( defaultDate !== null ) {
-      this.xBounds = [defaultDate - 3, defaultDate + 4];            
+      this.xBounds = [defaultDate - 3.5, defaultDate + 3.5];
     }
     else {
       this.xBounds = xBounds;
